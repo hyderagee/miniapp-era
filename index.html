@@ -195,23 +195,41 @@
     // Сообщаем MAX, что мини-приложение готово к показу
     if (WebApp && typeof WebApp.ready === 'function') WebApp.ready();
 
+    // Промежуточная страница рядом с index.html: сама добавляет #tab-7,
+    // т.к. MAX при открытии ссылки может отбрасывать часть после "#"
+    const REDIRECT_URL = new URL('catalog.html', location.href).href;
+
     // Мини-приложение запущено во фрейме (веб- и десктоп-версия MAX)?
     // era.trade запрещает показ своих страниц внутри чужих фреймов,
     // поэтому там переход внутри окна даёт ошибку «не позволяет установить соединение».
     let inFrame;
     try { inFrame = window.self !== window.top; } catch (_) { inFrame = true; }
 
+    function openViaMax() {
+      if (WebApp && typeof WebApp.openLink === 'function') {
+        WebApp.openLink(REDIRECT_URL);
+      } else {
+        window.open(REDIRECT_URL, '_blank', 'noopener');
+      }
+    }
+
     document.getElementById('catalog').addEventListener('click', (e) => {
       e.preventDefault();
-      if (!inFrame) {
-        // Мобильное приложение MAX: открываем каталог прямо в окне мини-приложения
-        window.location.href = CATALOG_URL;
-      } else if (WebApp && typeof WebApp.openLink === 'function') {
-        // Во фрейме встроить сайт нельзя — открываем через MAX в новой вкладке
-        WebApp.openLink(CATALOG_URL);
-      } else {
-        window.open(CATALOG_URL, '_blank', 'noopener');
+      if (inFrame) {
+        // Во фрейме встроить сайт нельзя — открываем через MAX
+        openViaMax();
+        return;
       }
+      // Мобильное приложение MAX: пробуем открыть каталог прямо в окне мини-приложения.
+      // Если MAX не дал уйти со страницы (так бывает на iPhone) — открываем через MAX.
+      let left = false;
+      const markLeft = () => { left = true; };
+      // beforeunload срабатывает сразу, как только переход начался (даже если сайт грузится долго)
+      window.addEventListener('beforeunload', markLeft, { once: true });
+      window.addEventListener('pagehide', markLeft, { once: true });
+      document.addEventListener('visibilitychange', markLeft, { once: true });
+      window.location.href = CATALOG_URL;
+      setTimeout(() => { if (!left && document.visibilityState === 'visible') openViaMax(); }, 1500);
     });
   </script>
 </body>
